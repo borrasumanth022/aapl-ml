@@ -1,0 +1,25 @@
+# Claude Code internal files
+CLAUDE.md
+.claude/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Data files (large — clone and run the pipeline to generate)
+data/raw/
+data/processed/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Models and logs
+models/
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
