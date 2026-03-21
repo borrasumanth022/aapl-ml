@@ -25,8 +25,8 @@ Currently uses AAPL as the proving ground before expanding to other instruments.
 | Phase | Description | Status |
 |---|---|---|
 | 1 | **Data Foundation** — OHLCV ingestion, feature engineering, forward return labels | ✅ Complete |
-| 2 | **Pattern Recognition** — Baseline models (XGBoost, LSTM) on price features | 🔲 Next |
-| 3 | **Event Linkage** — NLP layer mapping news and macro events to market reactions | 🔲 Planned |
+| 2 | **Pattern Recognition** — Baseline models (XGBoost, LSTM) on price features | ✅ Complete |
+| 3 | **Event Linkage** — NLP layer mapping news and macro events to market reactions | 🔲 Next |
 | 4 | **Fusion Model** — Combined price patterns + event signals | 🔲 Planned |
 | 5 | **Prediction Engine** — Multi-horizon forecasts (1w → 1m → 3m → 6m → 1y) | 🔲 Planned |
 
@@ -46,6 +46,24 @@ Labels are generated at 5 horizons (1w, 1m, 3m, 6m, 1y), each with three target 
 - **Regression** — raw % forward return
 - **3-class direction** — +1 (up) / 0 (sideways) / −1 (down), with a ±2% noise band
 - **Binary** — up (1) or down (0)
+
+---
+
+## Phase 2 output
+
+Feature selection, walk-forward XGBoost training, and SHAP analysis across 4 model variants.
+
+| Script | Purpose | Key output |
+|---|---|---|
+| `04_feature_selection.py` | Drops price-level proxies and correlated duplicates | `models/feature_list.json` — 36 features |
+| `05_train_baseline.py` | Baseline XGBoost on `dir_1m` | OOS 45.89% — below naive 52.90% |
+| `06a_exp_dir1w.py` | Experiment: weekly horizon | OOS 38.71% — **beats naive 37.50%** |
+| `06b_exp_weighted.py` | Experiment: class-balanced weights on `dir_1m` | OOS 40.96% — below naive |
+| `07_best_model.py` | **Best model**: `dir_1w` + class weights + SHAP | OOS 38.35%, macro F1=0.367 |
+
+**Best model** (`models/xgb_dir_1w_weighted.pkl`): 5-fold walk-forward validation, 1995–2025, 6,125 OOS samples. Class-balanced sample weights (inverse frequency per fold) to counter Bull-dominated class distribution (Bear 28% / Side 35% / Bull 37%).
+
+**SHAP findings**: Volatility features (`atr_pct`, `hvol_21d/63d`) dominate all three classes. `atr_pct` is strongly Sideways-specific (low ATR = price compression); `hvol_21d` spikes precede Bear moves; `price_52w_pct` is the clearest Bull signal. Directional indicators (MACD, RSI, SMAs) contribute but are secondary to volatility regime — motivating the Phase 3 event-signal layer.
 
 ---
 
@@ -85,17 +103,20 @@ pip install scikit-learn xgboost torch
 Each script is standalone and can be re-run independently.
 
 ```bash
-# Step 1 — download raw OHLCV data from Yahoo Finance
-python pipeline/01_fetch_data.py
+# Phase 1 — data foundation
+python pipeline/01_fetch_data.py       # download raw OHLCV
+python pipeline/02_features.py         # engineer technical features
+python pipeline/03_labels.py           # build forward return labels
 
-# Step 2 — engineer technical features
-python pipeline/02_features.py
-
-# Step 3 — build forward return labels
-python pipeline/03_labels.py
+# Phase 2 — pattern recognition
+python pipeline/04_feature_selection.py   # select 36 clean features
+python pipeline/05_train_baseline.py      # baseline XGBoost (dir_1m)
+python pipeline/06a_exp_dir1w.py          # experiment: weekly horizon
+python pipeline/06b_exp_weighted.py       # experiment: class-weighted dir_1m
+python pipeline/07_best_model.py          # best model + SHAP analysis
 ```
 
-Run in order on first setup. Outputs are written to `data/raw/` and `data/processed/`.
+Run Phase 1 in order on first setup. Phase 2 requires Phase 1 outputs. Outputs are written to `data/raw/`, `data/processed/`, and `models/`.
 
 ---
 
@@ -107,13 +128,18 @@ aapl_ml/
 │   ├── raw/                  # Raw OHLCV (downloaded)
 │   └── processed/            # Feature matrix and labelled dataset
 ├── pipeline/
-│   ├── 01_fetch_data.py      # Data ingestion
-│   ├── 02_features.py        # Feature engineering
-│   └── 03_labels.py          # Label construction
+│   ├── 01_fetch_data.py           # Data ingestion
+│   ├── 02_features.py             # Feature engineering
+│   ├── 03_labels.py               # Label construction
+│   ├── 04_feature_selection.py    # Feature selection (36 features)
+│   ├── 05_train_baseline.py       # Baseline XGBoost (dir_1m)
+│   ├── 06a_exp_dir1w.py           # Experiment: weekly horizon
+│   ├── 06b_exp_weighted.py        # Experiment: class-weighted dir_1m
+│   └── 07_best_model.py           # Best model + SHAP analysis
 ├── notebooks/
-│   └── 01_explore.ipynb      # Exploratory data analysis
-├── models/                   # Saved model artefacts (Phase 2+)
-└── logs/                     # Training logs (Phase 2+)
+│   └── 01_explore.ipynb           # Exploratory data analysis
+├── models/                        # Saved model artefacts (gitignored)
+└── logs/                          # Training logs (gitignored)
 ```
 
 ---
