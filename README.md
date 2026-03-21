@@ -159,7 +159,7 @@ Each horizon has all four column types (`ret_`, `dir_`, `bin_`, `adj_ret_`).
 
 ## Related
 
-**[ManthIQ](https://github.com/your-username/ManthIQ)** — a React + FastAPI dashboard that reads the `aapl_features.parquet` output from this pipeline and visualises it with an interactive price chart, metric cards, and a Model Lab for prediction output.
+**[ManthIQ](https://github.com/borrasumanth022/ManthIQ)** — a React + FastAPI dashboard that reads the `aapl_features.parquet` output from this pipeline and visualises it with an interactive price chart, metric cards, and a Model Lab for prediction output.
 
 ---
 
