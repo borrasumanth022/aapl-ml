@@ -116,3 +116,26 @@ LSTM_TRAIN = {
 }
 
 HOLDOUT_START = "2024-01-01"
+
+# ── Phase 5 Step 2 — raw OHLCV LSTM ──────────────────────────────────────────
+OHLCV_FEATURES       = ["open", "high", "low", "close", "volume"]
+ROLLING_ZSCORE_WIN   = 252   # trading days for rolling mean/std normalization
+SEQ_LEN_RAW          = 60    # 3 months of daily data
+
+LSTM_RAW_ARCH = {
+    "hidden_size" : 256,
+    "num_layers"  : 2,
+    "dropout"     : 0.4,
+}
+
+LSTM_RAW_TRAIN = {
+    "lr"          : 0.001,
+    "weight_decay": 1e-4,
+    "batch_size"  : 64,
+    "max_epochs"  : 100,
+    "patience_es" : 10,
+    "patience_lr" : 5,
+    "lr_factor"   : 0.5,
+    "lr_min"      : 1e-5,
+    "grad_clip"   : 1.0,
+}

@@ -62,3 +62,7 @@ PRED_ENSEMBLE       = ROOT / "data" / "processed" / "aapl_predictions_ensemble.p
 MODEL_LSTM          = ROOT / "models" / "lstm_dir_1w.pt"
 PRED_LSTM           = ROOT / "data" / "processed" / "aapl_predictions_lstm.parquet"
 LOSS_CURVES_LSTM    = ROOT / "docs" / "lstm_loss_curves.png"
+
+MODEL_LSTM_RAW      = ROOT / "models" / "lstm_raw_ohlcv.pt"
+PRED_LSTM_RAW       = ROOT / "data" / "processed" / "aapl_predictions_lstm_raw.parquet"
+LOSS_CURVES_LSTM_RAW = ROOT / "docs" / "lstm_raw_loss_curves.png"
