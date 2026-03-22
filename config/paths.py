@@ -51,8 +51,14 @@ SHAP_SUMMARY       = ROOT / "models" / "shap_summary.csv"
 SHAP_EVENTS        = ROOT / "models" / "shap_summary_events.csv"
 SHAP_INTERACTIONS  = ROOT / "models" / "shap_summary_interactions.csv"
 
-# ── Phase 4 (placeholders — filled in as models are trained) ──────────────────
+# ── Phase 4 ───────────────────────────────────────────────────────────────────
 MODEL_LGBM          = ROOT / "models" / "lgbm_dir_1w.pkl"
 PRED_LGBM           = ROOT / "data" / "processed" / "aapl_predictions_lgbm.parquet"
-MODEL_ENSEMBLE      = ROOT / "models" / "ensemble_meta.pkl"
+SHAP_LGBM           = ROOT / "models" / "shap_summary_lgbm.csv"
+MODEL_ENSEMBLE      = ROOT / "models" / "ensemble_v1.pkl"
 PRED_ENSEMBLE       = ROOT / "data" / "processed" / "aapl_predictions_ensemble.parquet"
+
+# ── Phase 5 ───────────────────────────────────────────────────────────────────
+MODEL_LSTM          = ROOT / "models" / "lstm_dir_1w.pt"
+PRED_LSTM           = ROOT / "data" / "processed" / "aapl_predictions_lstm.parquet"
+LOSS_CURVES_LSTM    = ROOT / "docs" / "lstm_loss_curves.png"

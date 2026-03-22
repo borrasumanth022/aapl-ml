@@ -94,3 +94,25 @@ PHASE3_CHAMPION = {
     "f1"     : 0.375,
     "recall" : {"Bear": 0.3060, "Sideways": 0.3990, "Bull": 0.4200},
 }
+
+# ── Phase 5 — LSTM hyperparameters ────────────────────────────────────────────
+SEQ_LEN = 100   # 20 trading weeks * 5 days/week
+
+LSTM_ARCH = {
+    "hidden_size" : 128,
+    "num_layers"  : 2,
+    "dropout"     : 0.3,
+}
+
+LSTM_TRAIN = {
+    "lr"          : 0.001,
+    "batch_size"  : 64,
+    "max_epochs"  : 100,
+    "patience_es" : 10,    # early stopping
+    "patience_lr" : 5,     # ReduceLROnPlateau
+    "lr_factor"   : 0.5,
+    "lr_min"      : 1e-5,
+    "grad_clip"   : 1.0,
+}
+
+HOLDOUT_START = "2024-01-01"
