@@ -8,14 +8,18 @@ a recommended clean feature list for model training.
 Output: models/feature_list.json
 """
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import pandas as pd
 import numpy as np
 import json
-from pathlib import Path
+from config import paths as P
 
 # ── Config ─────────────────────────────────────────────────────────────────────
-DATA_FILE        = Path(__file__).parent.parent / "data" / "processed" / "aapl_labeled.parquet"
-OUT_FILE         = Path(__file__).parent.parent / "models" / "feature_list.json"
+DATA_FILE        = P.DATA_LABELED
+OUT_FILE         = P.FEATURE_LIST
 CORR_THRESHOLD   = 0.95
 
 LABEL_PREFIXES   = ("ret_", "dir_", "bin_", "adj_ret_")
@@ -201,4 +205,4 @@ if __name__ == "__main__":
         json.dump(output, f, indent=2)
 
     print(f"\nSaved to {OUT_FILE}")
-    print("\nStep 4 complete. Run pipeline/05_train_baseline.py next.\n")
+    print("\nStep 4 complete. Run src/05_train_baseline.py next.\n")

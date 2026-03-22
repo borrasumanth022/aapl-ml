@@ -28,18 +28,22 @@ Output schema (one row per event):
 Output: data/processed/aapl_events.parquet
 """
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import io
 import warnings
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import requests
 import yfinance as yf
+from config import paths as P
 
 warnings.filterwarnings("ignore")
 
-OUT_FILE = Path(__file__).parent.parent / "data" / "processed" / "aapl_events.parquet"
+OUT_FILE = P.DATA_EVENTS
 
 FRED_BASE = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={}"
 FRED_START = "1993-01-01"   # enough history to align with price data start (1995)
@@ -396,4 +400,4 @@ for sub, cnt in price_window["event_subtype"].value_counts().items():
 OUT_FILE.parent.mkdir(parents=True, exist_ok=True)
 events.to_parquet(OUT_FILE)
 print(f"\n  Saved -> {OUT_FILE}")
-print(f"\nPhase 3 Step 1 complete. Run 09_event_features.py next.\n")
+print(f"\nPhase 3 Step 1 complete. Run src/09_event_features.py next.\n")

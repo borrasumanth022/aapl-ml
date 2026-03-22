@@ -24,9 +24,12 @@ Outputs:
   models/shap_summary_events.csv
 """
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import json
 import pickle
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -35,50 +38,28 @@ from sklearn.metrics import accuracy_score, confusion_matrix, classification_rep
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.utils.class_weight import compute_sample_weight
 from xgboost import XGBClassifier
+from config import paths as P, settings as S
 
-# ── Paths ──────────────────────────────────────────────────────────────────────
-DATA_FILE  = Path(__file__).parent.parent / "data" / "processed" / "aapl_with_events.parquet"
-FEAT_FILE  = Path(__file__).parent.parent / "models" / "feature_list.json"
-MODEL_FILE = Path(__file__).parent.parent / "models" / "xgb_dir_1w_events.pkl"
-PRED_FILE  = Path(__file__).parent.parent / "data" / "processed" / "aapl_predictions_events.parquet"
-SHAP_FILE  = Path(__file__).parent.parent / "models" / "shap_summary_events.csv"
+DATA_FILE  = P.DATA_WITH_EVENTS
+FEAT_FILE  = P.FEATURE_LIST
+MODEL_FILE = P.MODEL_EVENTS
+PRED_FILE  = P.PRED_EVENTS
+SHAP_FILE  = P.SHAP_EVENTS
 
-TARGET   = "dir_1w"
-N_SPLITS = 5
-
-# Same params as Phase 2 best model — isolates the effect of the new features
-XGB_PARAMS = {
-    "n_estimators"    : 300,
-    "max_depth"       : 4,
-    "learning_rate"   : 0.05,
-    "subsample"       : 0.8,
-    "colsample_bytree": 0.8,
-    "min_child_weight": 20,
-    "eval_metric"     : "mlogloss",
-    "random_state"    : 42,
-    "n_jobs"          : -1,
-    "verbosity"       : 0,
-}
-
-LABEL_ENCODE = {-1: 0, 0: 1, 1: 2}
-LABEL_DECODE = { 0:-1, 1: 0, 2: 1}
-CLASS_NAMES  = {-1: "Bear (-1)", 0: "Side ( 0)", 1: "Bull (+1)"}
-CLASS_LABELS = ["Bear", "Sideways", "Bull"]
-CLASSES      = [-1, 0, 1]
-
-EVENT_FEATURES = [
-    "days_to_next_earnings", "days_since_last_earnings", "has_earnings_data",
-    "last_eps_surprise_pct", "earnings_streak",
-    "fed_rate_level", "fed_rate_change_1m", "fed_rate_change_3m",
-    "cpi_yoy_change", "unemployment_level", "unemployment_change_3m",
-    "days_to_next_product_event", "days_since_last_product_event",
-    "is_iphone_cycle", "rate_environment", "inflation_regime",
-]
+TARGET      = "dir_1w"
+N_SPLITS    = S.N_SPLITS
+XGB_PARAMS  = S.XGB_PARAMS
+LABEL_ENCODE = S.LABEL_ENCODE
+LABEL_DECODE = S.LABEL_DECODE
+CLASS_NAMES  = S.CLASS_NAMES
+CLASS_LABELS = S.CLASS_LABELS
+CLASSES      = S.CLASSES
+EVENT_FEATURES = S.EVENT_FEATURES
 
 # Phase 2 best model results for direct comparison
-P2_OOS_ACC  = 0.3835
-P2_MACRO_F1 = 0.367
-P2_RECALL   = {"Bear": 0.2310, "Sideways": 0.4549, "Bull": 0.4177}
+P2_OOS_ACC  = S.PHASE2_BEST["acc"]
+P2_MACRO_F1 = S.PHASE2_BEST["f1"]
+P2_RECALL   = S.PHASE2_BEST["recall"]
 
 
 def section(title):
@@ -105,8 +86,8 @@ if __name__ == "__main__":
     all_features  = tech_features + EVENT_FEATURES
 
     # Fill sentinel values for partial-coverage event features
-    df["days_since_last_earnings"]      = df["days_since_last_earnings"].fillna(90)
-    df["days_since_last_product_event"] = df["days_since_last_product_event"].fillna(180)
+    df["days_since_last_earnings"]      = df["days_since_last_earnings"].fillna(S.CAP_EARNINGS)
+    df["days_since_last_product_event"] = df["days_since_last_product_event"].fillna(S.CAP_PRODUCT)
 
     cols_needed = all_features + [TARGET]
     df = df[cols_needed].dropna()
@@ -266,10 +247,6 @@ if __name__ == "__main__":
         print(f"  {name+' Recall':<30}  {p2*100:>9.1f}%  {p3*100:>9.1f}%  "
               f"  {d:>+7.2f}pp")
 
-    best_delta = max(
-        (per_class_recall.get(cls, 0) - P2_RECALL[name_map[cls]]) * 100
-        for cls in CLASSES
-    )
     print(f"\n  Event features {'IMPROVED' if delta_f1 > 0 else 'DID NOT IMPROVE'} Macro F1 "
           f"({'+'if delta_f1>0 else ''}{delta_f1/100:.3f})")
     print(f"  Bear recall change: "
@@ -367,7 +344,6 @@ if __name__ == "__main__":
               f"{row['Bear']:>7.4f}  {row['Sideways']:>7.4f}  "
               f"{row['Bull']:>7.4f}  {row['mean_all_classes']:>7.4f}  {tag}")
 
-    # Event features that made the SHAP top 10
     shap_top10 = shap_df.head(10)
     event_shap_top10 = shap_top10[shap_top10["is_event"]].index.tolist()
     print(f"\n  Event features in SHAP top 10:")
@@ -380,7 +356,6 @@ if __name__ == "__main__":
     else:
         print("    None in top 10 — event features have marginal SHAP impact")
 
-    # Full event-feature SHAP breakdown
     print(f"\n  All event features ranked by mean |SHAP|:")
     event_shap = shap_df[shap_df["is_event"]].sort_values("mean_all_classes", ascending=False)
     for rank, (feat, row) in enumerate(event_shap.iterrows(), 1):

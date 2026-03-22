@@ -4,17 +4,18 @@ Downloads daily OHLCV from 1995 to today and saves to Parquet.
 Run this once, then re-run periodically to update.
 """
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import yfinance as yf
 import pandas as pd
-from pathlib import Path
 from datetime import datetime
+from config import paths as P, settings as S
 
 # ── Config ────────────────────────────────────────────────────────────────────
-TICKER      = "AAPL"
-START_DATE  = "1995-01-01"
 END_DATE    = datetime.today().strftime("%Y-%m-%d")
-RAW_DIR     = Path(__file__).parent.parent / "data" / "raw"
-OUTPUT_FILE = RAW_DIR / "aapl_daily_raw.parquet"
+OUTPUT_FILE = P.DATA_RAW
 
 # ── Fetch ─────────────────────────────────────────────────────────────────────
 def fetch(ticker: str, start: str, end: str) -> pd.DataFrame:
@@ -50,7 +51,7 @@ def save(df: pd.DataFrame, path: Path) -> None:
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    df = fetch(TICKER, START_DATE, END_DATE)
+    df = fetch(S.TICKER, S.START_DATE, END_DATE)
 
     print("\nSample (last 5 rows):")
     print(df.tail())
@@ -59,4 +60,4 @@ if __name__ == "__main__":
     print(f"Total rows : {len(df)}")
 
     save(df, OUTPUT_FILE)
-    print("\n✓ Step 1 complete. Run 02_features.py next.\n")
+    print("\n✓ Step 1 complete. Run src/02_features.py next.\n")

@@ -12,13 +12,17 @@ Feature groups:
   F. Calendar features           — day-of-week, month, quarter
 """
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import pandas as pd
 import numpy as np
-from pathlib import Path
+from config import paths as P
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-RAW_FILE    = Path(__file__).parent.parent / "data" / "raw"  / "aapl_daily_raw.parquet"
-OUT_FILE    = Path(__file__).parent.parent / "data" / "processed" / "aapl_features.parquet"
+RAW_FILE = P.DATA_RAW
+OUT_FILE = P.DATA_FEATURES
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -215,4 +219,4 @@ if __name__ == "__main__":
         print(f"  {col}")
 
     print(f"\nSaved → {OUT_FILE}")
-    print("\n✓ Step 2 complete. Run 03_labels.py next.\n")
+    print("\n✓ Step 2 complete. Run src/03_labels.py next.\n")

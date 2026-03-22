@@ -1,56 +1,43 @@
 """
-Phase 2 - Experiment B: Class-weighted XGBoost on dir_1m
-==========================================================
-Same dir_1m target as baseline but with inverse-frequency sample weights
-to counter the Bull-dominated class imbalance (Bull 51.9%, Bear 31.4%, Side 16.7%).
+Phase 2 - Experiment A: dir_1w target
+======================================
+Same XGBoost baseline but predicting weekly direction instead of monthly.
+Hypothesis: shorter horizon = tighter technical signal, less noise.
 
-Sample weights: each sample gets weight = N / (n_classes * class_count)
-so that all three classes contribute equally to the loss.
-
-Target:  dir_1m  (+1 = Bull, 0 = Sideways, -1 = Bear)
+Target:  dir_1w  (+1 = Bull, 0 = Sideways, -1 = Bear)
 Features: 36 clean features from models/feature_list.json
 
 Outputs:
-  models/xgb_dir_1m_weighted.pkl
-  data/processed/aapl_predictions_1m_weighted.parquet
+  models/xgb_dir_1w.pkl
+  data/processed/aapl_predictions_1w.parquet
 """
+
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import json
 import pickle
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 from sklearn.model_selection import TimeSeriesSplit
-from sklearn.utils.class_weight import compute_sample_weight
 from xgboost import XGBClassifier
+from config import paths as P, settings as S
 
-DATA_FILE  = Path(__file__).parent.parent / "data" / "processed" / "aapl_labeled.parquet"
-FEAT_FILE  = Path(__file__).parent.parent / "models" / "feature_list.json"
-MODEL_FILE = Path(__file__).parent.parent / "models" / "xgb_dir_1m_weighted.pkl"
-PRED_FILE  = Path(__file__).parent.parent / "data" / "processed" / "aapl_predictions_1m_weighted.parquet"
+DATA_FILE  = P.DATA_LABELED
+FEAT_FILE  = P.FEATURE_LIST
+MODEL_FILE = P.MODEL_DIR1W
+PRED_FILE  = P.PRED_DIR1W
 
-TARGET   = "dir_1m"
-N_SPLITS = 5
-
-XGB_PARAMS = {
-    "n_estimators"    : 300,
-    "max_depth"       : 4,
-    "learning_rate"   : 0.05,
-    "subsample"       : 0.8,
-    "colsample_bytree": 0.8,
-    "min_child_weight": 20,
-    "eval_metric"     : "mlogloss",
-    "random_state"    : 42,
-    "n_jobs"          : -1,
-    "verbosity"       : 0,
-}
-
-LABEL_ENCODE = {-1: 0, 0: 1, 1: 2}
-LABEL_DECODE = { 0:-1, 1: 0, 2: 1}
-CLASS_NAMES  = {-1: "Bear (-1)", 0: "Side ( 0)", 1: "Bull (+1)"}
-CLASSES      = [-1, 0, 1]
+TARGET      = "dir_1w"
+N_SPLITS    = S.N_SPLITS
+XGB_PARAMS  = S.XGB_PARAMS
+LABEL_ENCODE = S.LABEL_ENCODE
+LABEL_DECODE = S.LABEL_DECODE
+CLASS_NAMES  = S.CLASS_NAMES
+CLASSES      = S.CLASSES
 
 
 def section(title):
@@ -82,20 +69,19 @@ if __name__ == "__main__":
 
     print(f"  Samples after dropna : {len(df):,}")
     print(f"  Features             : {len(features)}")
-    print(f"  Target               : {TARGET}  (with class-balanced sample weights)")
+    print(f"  Target               : {TARGET}")
     print(f"  Date range           : {df.index.min().date()} to {df.index.max().date()}")
 
     counts = pd.Series(y).value_counts().sort_index()
     total  = len(y)
-    print(f"\n  Target distribution (before weighting):")
+    print(f"\n  Target distribution:")
     for cls in CLASSES:
         n = counts.get(cls, 0)
-        w = total / (3 * n) if n > 0 else 0
-        print(f"    {CLASS_NAMES[cls]}  {n:>5} ({n/total*100:.1f}%)  sample_weight={w:.3f}")
+        print(f"    {CLASS_NAMES[cls]}  {n:>5} ({n/total*100:.1f}%)")
 
     y_enc = np.array([LABEL_ENCODE[v] for v in y])
 
-    section(f"WALK-FORWARD VALIDATION  ({N_SPLITS} expanding windows, class-balanced weights)")
+    section(f"WALK-FORWARD VALIDATION  ({N_SPLITS} expanding windows)")
     tscv = TimeSeriesSplit(n_splits=N_SPLITS)
 
     fold_results  = []
@@ -109,12 +95,8 @@ if __name__ == "__main__":
         X_train, X_test = X[train_idx], X[test_idx]
         y_train, y_test = y_enc[train_idx], y_enc[test_idx]
 
-        # Compute inverse-frequency sample weights from training fold only (no leakage)
-        y_train_orig = np.array([LABEL_DECODE[v] for v in y_train])
-        sample_weights = compute_sample_weight(class_weight="balanced", y=y_train_orig)
-
         model = XGBClassifier(**XGB_PARAMS)
-        model.fit(X_train, y_train, sample_weight=sample_weights)
+        model.fit(X_train, y_train)
 
         y_pred  = model.predict(X_test)
         y_proba = model.predict_proba(X_test)
@@ -227,10 +209,8 @@ if __name__ == "__main__":
     print(f"\n  Predictions saved  : {PRED_FILE.name}  ({len(pred_df):,} rows)")
 
     print("\n  Training final model on full dataset...")
-    y_all_orig = np.array([LABEL_DECODE[v] for v in y_enc])
-    final_weights = compute_sample_weight(class_weight="balanced", y=y_all_orig)
     final_model = XGBClassifier(**XGB_PARAMS)
-    final_model.fit(X, y_enc, sample_weight=final_weights)
+    final_model.fit(X, y_enc)
 
     MODEL_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(MODEL_FILE, "wb") as f:
@@ -254,8 +234,8 @@ if __name__ == "__main__":
     for rank, (_, row) in enumerate(imp_df.head(15).iterrows(), 1):
         print(f"  {rank:>4}  {row['feature']:<25}  {row['gain']:>10,.1f}")
 
-    print(f"\nExperiment B complete.")
-    print(f"  Target       : {TARGET} (class-balanced sample weights)")
+    print(f"\nExperiment A complete.")
+    print(f"  Target       : {TARGET}")
     print(f"  OOS Accuracy : {oos_acc:.4f} vs naive {naive_acc:.4f}  ({'BEATS' if beats_naive else 'BELOW'} baseline)")
     print(f"  Model        : {MODEL_FILE}")
     print(f"  Predictions  : {PRED_FILE}\n")

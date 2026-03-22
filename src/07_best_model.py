@@ -14,9 +14,12 @@ Outputs:
   models/shap_summary.csv                   -- mean |SHAP| per feature (all classes)
 """
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import json
 import pickle
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -25,35 +28,22 @@ from sklearn.metrics import accuracy_score, confusion_matrix, classification_rep
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.utils.class_weight import compute_sample_weight
 from xgboost import XGBClassifier
+from config import paths as P, settings as S
 
-# ── Paths ──────────────────────────────────────────────────────────────────────
-DATA_FILE  = Path(__file__).parent.parent / "data" / "processed" / "aapl_labeled.parquet"
-FEAT_FILE  = Path(__file__).parent.parent / "models" / "feature_list.json"
-MODEL_FILE = Path(__file__).parent.parent / "models" / "xgb_dir_1w_weighted.pkl"
-PRED_FILE  = Path(__file__).parent.parent / "data" / "processed" / "aapl_predictions_best.parquet"
-SHAP_FILE  = Path(__file__).parent.parent / "models" / "shap_summary.csv"
+DATA_FILE  = P.DATA_LABELED
+FEAT_FILE  = P.FEATURE_LIST
+MODEL_FILE = P.MODEL_WEIGHTED_1W
+PRED_FILE  = P.PRED_BEST
+SHAP_FILE  = P.SHAP_SUMMARY
 
-TARGET   = "dir_1w"
-N_SPLITS = 5
-
-XGB_PARAMS = {
-    "n_estimators"    : 300,
-    "max_depth"       : 4,
-    "learning_rate"   : 0.05,
-    "subsample"       : 0.8,
-    "colsample_bytree": 0.8,
-    "min_child_weight": 20,
-    "eval_metric"     : "mlogloss",
-    "random_state"    : 42,
-    "n_jobs"          : -1,
-    "verbosity"       : 0,
-}
-
-LABEL_ENCODE = {-1: 0, 0: 1, 1: 2}
-LABEL_DECODE = { 0:-1, 1: 0, 2: 1}
-CLASS_NAMES  = {-1: "Bear (-1)", 0: "Side ( 0)", 1: "Bull (+1)"}
-CLASS_LABELS = ["Bear", "Sideways", "Bull"]   # for SHAP output columns
-CLASSES      = [-1, 0, 1]
+TARGET      = "dir_1w"
+N_SPLITS    = S.N_SPLITS
+XGB_PARAMS  = S.XGB_PARAMS
+LABEL_ENCODE = S.LABEL_ENCODE
+LABEL_DECODE = S.LABEL_DECODE
+CLASS_NAMES  = S.CLASS_NAMES
+CLASS_LABELS = S.CLASS_LABELS
+CLASSES      = S.CLASSES
 
 
 def section(title):
@@ -266,22 +256,16 @@ if __name__ == "__main__":
     print("\n  Computing SHAP values (this may take ~30s)...")
     explainer   = shap.TreeExplainer(final_model)
     shap_raw    = explainer.shap_values(X)
-    # shap_raw shape depends on SHAP version:
-    #   older: list of 3 arrays (n_samples, n_features)
-    #   newer (0.40+): 3D array (n_samples, n_features, n_classes)
-    shap_arr = np.array(shap_raw)  # force to ndarray for uniform handling
+    shap_arr = np.array(shap_raw)
     if shap_arr.ndim == 3 and shap_arr.shape[0] == len(X):
-        # shape: (n_samples, n_features, n_classes)
         shap_values = [shap_arr[:, :, i] for i in range(shap_arr.shape[2])]
     elif shap_arr.ndim == 3 and shap_arr.shape[0] == 3:
-        # shape: (n_classes, n_samples, n_features)
         shap_values = [shap_arr[i] for i in range(3)]
     else:
-        shap_values = shap_raw  # already a list
+        shap_values = shap_raw
 
     class_order = ["Bear", "Sideways", "Bull"]
 
-    # Mean absolute SHAP per feature per class
     mean_abs = {}
     for i, cls_label in enumerate(class_order):
         mean_abs[cls_label] = np.abs(shap_values[i]).mean(axis=0)
@@ -300,14 +284,12 @@ if __name__ == "__main__":
               f"{row['Bull']:>8.4f}  "
               f"{row['mean_all_classes']:>8.4f}")
 
-    # Per-class top 10
     for cls_label in class_order:
         top10 = shap_df.sort_values(cls_label, ascending=False).head(10)
         print(f"\n  Top 10 features for {cls_label} predictions (mean |SHAP|):")
         for rank, (feat, row) in enumerate(top10.iterrows(), 1):
             print(f"    {rank:>2}. {feat:<25}  {row[cls_label]:.4f}")
 
-    # Notable: features that matter a lot for one class but not others (specialised)
     print(f"\n  Class-specialised features  (top 5 that differ most across classes):")
     shap_df["spread"] = shap_df[class_order].max(axis=1) - shap_df[class_order].min(axis=1)
     specialized = shap_df.nlargest(5, "spread")
@@ -316,7 +298,6 @@ if __name__ == "__main__":
         print(f"    {feat:<25}  Bear={row['Bear']:.4f}  Side={row['Sideways']:.4f}  Bull={row['Bull']:.4f}  "
               f"(strongest for {dominant})")
 
-    # Save SHAP summary
     SHAP_FILE.parent.mkdir(parents=True, exist_ok=True)
     shap_df.to_csv(SHAP_FILE)
     print(f"\n  SHAP summary saved : {SHAP_FILE.name}")

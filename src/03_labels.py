@@ -11,26 +11,20 @@ Label design:
                 so the model doesn't have to predict noise around 0
 """
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import pandas as pd
 import numpy as np
-from pathlib import Path
+from config import paths as P, settings as S
 
-# ── Config ────────────────────────────────────────────────────────────────────
-FEATURES_FILE = Path(__file__).parent.parent / "data" / "processed" / "aapl_features.parquet"
-OUT_FILE      = Path(__file__).parent.parent / "data" / "processed" / "aapl_labeled.parquet"
+# ── Paths ─────────────────────────────────────────────────────────────────────
+FEATURES_FILE = P.DATA_FEATURES
+OUT_FILE      = P.DATA_LABELED
 
-# Horizons (trading days)
-HORIZONS = {
-    "1w":  5,
-    "1m":  21,
-    "3m":  63,
-    "6m":  126,
-    "1y":  252,
-}
-
-# "Sideways" band — returns within ±THRESHOLD% are labelled 0 (no clear direction)
-# Helps the model focus on meaningful moves, not noise
-DIRECTION_THRESHOLD = 0.02   # 2%
+HORIZONS            = S.HORIZONS
+DIRECTION_THRESHOLD = S.DIRECTION_THRESHOLD
 
 
 # ── Label builders ────────────────────────────────────────────────────────────

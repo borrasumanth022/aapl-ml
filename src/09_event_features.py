@@ -17,33 +17,33 @@ recently published observation.
 Output: data/processed/aapl_with_events.parquet
 """
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import io
 import warnings
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import requests
+from config import paths as P, settings as S
 
 warnings.filterwarnings("ignore")
 
-# ── Paths ──────────────────────────────────────────────────────────────────────
-LABELED_FILE = Path(__file__).parent.parent / "data" / "processed" / "aapl_labeled.parquet"
-EVENTS_FILE  = Path(__file__).parent.parent / "data" / "processed" / "aapl_events.parquet"
-OUT_FILE     = Path(__file__).parent.parent / "data" / "processed" / "aapl_with_events.parquet"
+LABELED_FILE  = P.DATA_LABELED
+EVENTS_FILE   = P.DATA_EVENTS
+OUT_FILE      = P.DATA_WITH_EVENTS
 
-FRED_BASE    = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={}"
-CAP_EARNINGS = 90    # days
-CAP_PRODUCT  = 180   # days
-IPHONE_WINDOW = 60   # days either side of launch
+FRED_BASE     = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={}"
+CAP_EARNINGS  = S.CAP_EARNINGS
+CAP_PRODUCT   = S.CAP_PRODUCT
+IPHONE_WINDOW = S.IPHONE_WINDOW
 
-# Inflation regime thresholds (CPI YoY %)
-INFLATION_HIGH   = 4.0
-INFLATION_LOW    = 1.5
-
-# Rate environment thresholds (3m fed change in bps)
-RATE_RISING_BPS  =  10
-RATE_FALLING_BPS = -10
+INFLATION_HIGH   = S.INFLATION_HIGH
+INFLATION_LOW    = S.INFLATION_LOW
+RATE_RISING_BPS  = S.RATE_RISING_BPS
+RATE_FALLING_BPS = S.RATE_FALLING_BPS
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -161,24 +161,19 @@ if __name__ == "__main__":
     )
 
     # ── has_earnings_data flag ────────────────────────────────────────────────
-    # 1 only for rows where at least one past earnings event is known
     feat["has_earnings_data"] = (~np.isnan(
         days_since_last(trading_dates, eps_dates.values)
     )).astype(int)
 
     # ── last_eps_surprise_pct — forward-fill from last known event ────────────
-    # Build a daily series: on each earnings date set the surprise %, else NaN
-    # then forward-fill
     eps_surprise_daily = pd.Series(np.nan, index=trading_dates, name="last_eps_surprise_pct")
     for dt, row in eps_events.iterrows():
         if dt in eps_surprise_daily.index:
             eps_surprise_daily.loc[dt] = row["magnitude"]
-    # For dates where multiple earnings fall on the same day take last
     eps_surprise_daily = eps_surprise_daily.groupby(level=0).last()
     feat["last_eps_surprise_pct"] = eps_surprise_daily.ffill().fillna(0.0)
 
     # ── earnings_streak — consecutive beats(+1) / misses(-1) ─────────────────
-    # A beat = positive surprise, miss = negative surprise
     eps_sorted = eps_events.sort_index()
     streak_by_date = {}
     streak = 0
@@ -190,8 +185,6 @@ if __name__ == "__main__":
             streak = max(streak, 0) + 1
         else:
             streak = min(streak, 0) - 1
-        # Record streak on earnings date; trading days will get this value
-        # via forward-fill below
         streak_by_date[dt] = streak
 
     streak_daily = pd.Series(np.nan, index=trading_dates)
@@ -256,7 +249,6 @@ if __name__ == "__main__":
     # ══════════════════════════════════════════════════════════════════════════
     section("C. Product Cycle Features")
 
-    # All product + event + split rows (anything Apple-specific)
     product_events = events[
         events["event_type"].isin(["product", "event", "split"])
     ].copy()
@@ -296,23 +288,19 @@ if __name__ == "__main__":
     # ══════════════════════════════════════════════════════════════════════════
     section("D. Macro Regime Features (derived)")
 
-    # rate_environment: encoded as int for model consumption
-    #   rising=1, stable=0, falling=-1 based on 3m fed change threshold
     rate_3m = feat["fed_rate_change_3m"]
     rate_env_cat = pd.Series("stable", index=trading_dates)
     rate_env_cat[rate_3m >  RATE_RISING_BPS]  = "rising"
     rate_env_cat[rate_3m <  RATE_FALLING_BPS] = "falling"
-    rate_env_cat[rate_3m.isna()]               = "stable"   # safe default
+    rate_env_cat[rate_3m.isna()]               = "stable"
     rate_env_map = {"falling": -1, "stable": 0, "rising": 1}
     feat["rate_environment"] = rate_env_cat.map(rate_env_map).astype(int)
 
-    # inflation_regime: encoded as int
-    #   high=1, normal=0, low=-1 based on CPI YoY thresholds
     cpi_yoy_s = feat["cpi_yoy_change"]
     inf_env_cat = pd.Series("normal", index=trading_dates)
     inf_env_cat[cpi_yoy_s >= INFLATION_HIGH] = "high"
     inf_env_cat[cpi_yoy_s <  INFLATION_LOW]  = "low"
-    inf_env_cat[cpi_yoy_s.isna()]            = "normal"   # safe default
+    inf_env_cat[cpi_yoy_s.isna()]            = "normal"
     inf_env_map = {"low": -1, "normal": 0, "high": 1}
     feat["inflation_regime"] = inf_env_cat.map(inf_env_map).astype(int)
 
@@ -348,7 +336,6 @@ if __name__ == "__main__":
         else:
             print(f"    {col:<35}  0.0% populated")
 
-    # Full coverage summary
     print(f"\n  Overall feature coverage (% rows with non-null value):")
     coverage = (combined[new_cols].notna().mean() * 100).sort_values(ascending=False)
     fully_covered = (coverage == 100).sum()
@@ -358,7 +345,6 @@ if __name__ == "__main__":
     print(f"    Partial       : {partial} features")
     print(f"    0% coverage   : {zero_cov} features")
 
-    # Any missing after join (should only be earnings data for pre-2005 rows)
     pre_earnings_rows = (combined["has_earnings_data"] == 0).sum()
     print(f"\n  Rows without earnings history : {pre_earnings_rows:,} "
           f"({pre_earnings_rows/len(combined)*100:.1f}%)  -- pre-2005")
@@ -367,4 +353,4 @@ if __name__ == "__main__":
     combined.to_parquet(OUT_FILE)
     print(f"\n  Saved -> {OUT_FILE}")
     print(f"  Final shape : {combined.shape[0]:,} rows x {combined.shape[1]} columns")
-    print(f"\nPhase 3 Step 2 complete. Run 10_retrain_with_events.py next.\n")
+    print(f"\nPhase 3 Step 2 complete. Run src/10_retrain_with_events.py next.\n")

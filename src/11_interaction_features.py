@@ -33,9 +33,12 @@ Outputs:
   models/shap_summary_interactions.csv
 """
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import json
 import pickle
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -44,55 +47,28 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.utils.class_weight import compute_sample_weight
 from xgboost import XGBClassifier
+from config import paths as P, settings as S
 
-# ── Paths ──────────────────────────────────────────────────────────────────────
-DATA_FILE  = Path(__file__).parent.parent / "data" / "processed" / "aapl_with_events.parquet"
-FEAT_FILE  = Path(__file__).parent.parent / "models" / "feature_list.json"
-MODEL_FILE = Path(__file__).parent.parent / "models" / "xgb_best_interactions.pkl"
-PRED_FILE  = Path(__file__).parent.parent / "data" / "processed" / "aapl_predictions_interactions.parquet"
-SHAP_FILE  = Path(__file__).parent.parent / "models" / "shap_summary_interactions.csv"
+DATA_FILE  = P.DATA_WITH_EVENTS
+FEAT_FILE  = P.FEATURE_LIST
+MODEL_FILE = P.MODEL_INTERACTIONS
+PRED_FILE  = P.PRED_INTERACTIONS
+SHAP_FILE  = P.SHAP_INTERACTIONS
 
-N_SPLITS = 5
-
-XGB_PARAMS = {
-    "n_estimators"    : 300,
-    "max_depth"       : 4,
-    "learning_rate"   : 0.05,
-    "subsample"       : 0.8,
-    "colsample_bytree": 0.8,
-    "min_child_weight": 20,
-    "eval_metric"     : "mlogloss",
-    "random_state"    : 42,
-    "n_jobs"          : -1,
-    "verbosity"       : 0,
-}
-
-LABEL_ENCODE = {-1: 0, 0: 1, 1: 2}
-LABEL_DECODE = { 0:-1, 1: 0, 2: 1}
-CLASS_NAMES  = {-1: "Bear (-1)", 0: "Side ( 0)", 1: "Bull (+1)"}
-CLASS_LABELS = ["Bear", "Sideways", "Bull"]
-CLASSES      = [-1, 0, 1]
-
-EVENT_FEATURES = [
-    "days_to_next_earnings", "days_since_last_earnings", "has_earnings_data",
-    "last_eps_surprise_pct", "earnings_streak",
-    "fed_rate_level", "fed_rate_change_1m", "fed_rate_change_3m",
-    "cpi_yoy_change", "unemployment_level", "unemployment_change_3m",
-    "days_to_next_product_event", "days_since_last_product_event",
-    "is_iphone_cycle", "rate_environment", "inflation_regime",
-]
-INTERACTION_FEATURES = [
-    "earnings_proximity_surprise",
-    "macro_stress_score",
-    "vol_macro_interaction",
-    "earnings_momentum",
-    "rate_vol_regime",
-]
+N_SPLITS    = S.N_SPLITS
+XGB_PARAMS  = S.XGB_PARAMS
+LABEL_ENCODE = S.LABEL_ENCODE
+LABEL_DECODE = S.LABEL_DECODE
+CLASS_NAMES  = S.CLASS_NAMES
+CLASS_LABELS = S.CLASS_LABELS
+CLASSES      = S.CLASSES
+EVENT_FEATURES       = S.EVENT_FEATURES
+INTERACTION_FEATURES = S.INTERACTION_FEATURES
 
 # Phase 2 baselines
 P2 = {
-    "dir_1w": {"acc": 0.3835, "f1": 0.367,
-               "recall": {"Bear": 0.2310, "Sideways": 0.4549, "Bull": 0.4177}},
+    "dir_1w": {"acc": S.PHASE2_BEST["acc"], "f1": S.PHASE2_BEST["f1"],
+               "recall": S.PHASE2_BEST["recall"]},
     "dir_1m": {"acc": 0.4096, "f1": 0.3433,
                "recall": {"Bear": 0.2828, "Sideways": 0.1947, "Bull": 0.5525}},
 }
@@ -114,8 +90,6 @@ def build_interaction_features(df: pd.DataFrame) -> pd.DataFrame:
     d = df.copy()
 
     # 1. earnings_proximity_surprise
-    #    Inverse proximity × |surprise|: higher = big surprise is imminent
-    #    (90 - days_to_next) so score increases as earnings approach
     days_remaining = (90 - d["days_to_next_earnings"]).clip(lower=0)
     d["earnings_proximity_surprise"] = (
         days_remaining * d["last_eps_surprise_pct"].abs()
@@ -293,8 +267,8 @@ if __name__ == "__main__":
     tech_features = feat_meta["features"]
 
     # Sentinel fills for partial-coverage event features
-    raw["days_since_last_earnings"]      = raw["days_since_last_earnings"].fillna(90)
-    raw["days_since_last_product_event"] = raw["days_since_last_product_event"].fillna(180)
+    raw["days_since_last_earnings"]      = raw["days_since_last_earnings"].fillna(S.CAP_EARNINGS)
+    raw["days_since_last_product_event"] = raw["days_since_last_product_event"].fillna(S.CAP_PRODUCT)
 
     # Build interaction features on the full dataset (global z-score normalisation)
     df = build_interaction_features(raw)
@@ -410,7 +384,7 @@ if __name__ == "__main__":
               f"{p2m*100:>9.1f}%  "
               f"{rb*100:>8.1f}% {delta_str(rb, p2m):>5}")
 
-    # Determine winner by macro F1 (most balanced metric for 3-class imbalanced problem)
+    # Determine winner by macro F1
     winner_key = "dir_1w" if f1_a >= f1_b else "dir_1m"
     winner_res  = results[winner_key]
     winner_p2   = P2[winner_key]
@@ -478,7 +452,6 @@ if __name__ == "__main__":
               f"{row['Bear']:>7.4f}  {row['Sideways']:>7.4f}  "
               f"{row['Bull']:>7.4f}  {row['mean_all_classes']:>7.4f}  {row['type']}")
 
-    # Interaction feature SHAP breakdown
     inter_shap = shap_df[shap_df["type"] == "[INTER]"].copy()
     event_shap = shap_df[shap_df["type"] == "[EVENT]"].copy()
 
@@ -505,11 +478,10 @@ if __name__ == "__main__":
     # ══════════════════════════════════════════════════════════════════════════
     section("PHASE 3 STEP 4 SUMMARY")
 
-    p2_champ_f1  = P2["dir_1w"]["f1"]   # phase 2 champion
+    p2_champ_f1  = P2["dir_1w"]["f1"]
     overall_best = "Phase 2 (dir_1w, 38.35%)" if winner_f1 < p2_champ_f1 else winner_name
     p2_str = f"F1={p2_champ_f1:.3f}"
     w_str  = f"F1={winner_f1:.3f}"
-    name_map = {-1: "Bear", 0: "Sideways", 1: "Bull"}
 
     print(f"""
   Model A (dir_1w, 57 feat) : acc={acc_a:.4f}  F1={f1_a:.4f}  vs P2: {P2['dir_1w']['f1']:.4f} ({f1_a-P2['dir_1w']['f1']:+.3f})
