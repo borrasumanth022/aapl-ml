@@ -1,24 +1,33 @@
-Retrain the aapl_ml XGBoost champion model for $ARGUMENTS (default: xgb_best_interactions, dir_1w target).
+# /project:train -- Train an aapl_ml model
 
-Steps:
-1. Confirm `data/processed/aapl_with_events.parquet` exists (≥7,000 rows, ≥90 cols).
-2. Run `python .claude/hooks/check-lookahead.py src/06_train.py` — must pass.
-3. Run `{PYTHON_EXE} src/06_train.py` (read path from CLAUDE.local.md).
-4. Report walk-forward metrics (5 folds, expanding window, TimeSeriesSplit):
-   - OOS Accuracy vs naive baseline (always-Bull = 37.50% for dir_1w)
-   - Macro F1 — must be ≥ 0.35 to accept
-   - Per-class recall: Bear / Sideways / Bull
-   - Comparison vs current champion: F1=0.375 (xgb_best_interactions, 57 features)
-5. Run SHAP analysis — show top 10 features by mean |SHAP|.
-6. If new model beats champion (F1 > 0.375), save as new champion.
-   If not, do NOT overwrite. Report gap.
+**Usage:**
+- /project:train xgb -- train XGBoost (champion architecture)
+- /project:train lgbm -- train LightGBM (reference, known to underperform)
+- /project:train lstm -- train LSTM on engineered 57 features
+- /project:train lstm_raw -- train LSTM on raw OHLCV (5 features)
 
-Current champion benchmarks (do not regress):
-- Model: xgb_best_interactions.pkl (57 features, dir_1w target)
-- OOS Accuracy: 38.30%
-- Macro F1: 0.375
-- Top features: atr_pct, hvol_21d/63d, rate_vol_regime, price_52w_pct
+## Instructions
 
-Standard hyperparams: n_estimators=300, max_depth=4, lr=0.05, subsample=0.8, min_child_weight=20, class_weight="balanced".
-Label encoding for aapl_ml (old pipeline): **-1=Bear, 0=Sideways, 1=Bull**
-Note: market_ml uses 0/1/2 — do not mix encodings.
+1. Read CLAUDE.local.md to get PYTHON_EXE.
+
+2. Map model type to script:
+   - xgb -> src/11_interaction_features.py
+   - lgbm -> src/12_lgbm.py
+   - lstm -> src/14_lstm.py
+   - lstm_raw -> src/15_lstm_raw.py
+
+3. After training, print the full comparison table:
+     Model                          Acc       F1     Bear     Side     Bull
+     XGB P3 champion (57 feat)   38.30%   0.375   30.6%   39.9%   42.0%  <- CHAMPION
+     New model                   xx.xx%   0.xxx   xx.x%   xx.x%   xx.x%
+     Naive (always Bull)         52.90%   0.230    0.0%    0.0%  100.0%
+
+4. CHAMPION decision rule:
+   - New champion if macro F1 > 0.375
+   - Also check: Sideways recall > 30%, Bear recall > 20%
+   - If F1 neutral but Bear recall improves > 5pp, note it but keep champion
+
+5. If new champion: save as models/xgb_phase3_champion.pkl and run SHAP.
+
+6. Always report SHAP top-5 features per class.
+

@@ -1,41 +1,40 @@
-# ML Standards — aapl_ml
+# ML Standards -- aapl_ml
 
-## Label encoding (AAPL-specific — do NOT use market_ml encoding)
-- **-1 = Bear**, **0 = Sideways**, **1 = Bull**
-- This differs from market_ml which uses 0/1/2 — never mix encodings
+## Walk-forward validation (non-negotiable)
+Use TimeSeriesSplit, not random k-fold. Split on date order.
 
-## Walk-forward validation
-- `TimeSeriesSplit(n_splits=5)` with expanding window — never KFold with shuffle=True
-- Test indices must always be strictly after training indices
-- No metrics computed on training folds
+    tscv = TimeSeriesSplit(n_splits=5)
+    for fold, (train_idx, test_idx) in enumerate(tscv.split(X)):
+        pass  # train rows always earlier than test rows
 
-## Baselines (always report alongside model metrics)
-- dir_1w naive baseline: **37.50% accuracy** (always-Bull)
-- Random macro F1: **0.333**
-- Current champion: F1=0.375, Acc=38.30% (xgb_best_interactions, 57 features)
+WRONG: KFold(shuffle=True)  -- destroys time ordering
 
-## Metrics
-- Always report both **OOS Accuracy** and **Macro F1**
-- Also report per-class recall: Bear / Sideways / Bull
-- F1 < 0.35 → do NOT accept as new champion
+## Holdout
+- >= 2024-01-01 (to 2025-03-19)
+- Never touched during training, walk-forward, or hyperparameter tuning
+- Evaluated once, after all model decisions are made
 
-## Scalers and encoders
-- `fit(X_train)` then `transform(X_test)` — never `fit_transform(X_full)`
-- Scaler must be fit on training fold only within each walk-forward split
+## No lookahead bias
+Features at date t must only use data available at close of day t.
 
-## Class imbalance
-- `class_weight="balanced"` required on all classifiers
+    # BANNED
+    df[chr(34) + chr(34).join(['feat']) + chr(34)] = df[chr(34)close chr(34)].shift(-1)
+    # CORRECT
+    df["feat"] = df["close"].pct_change()
+    df["ma"] = df["close"].rolling(20).mean()  # past 20 only
 
-## Lookahead bias
-- No `shift(-N)` where N > 0 on non-label columns
-- No `fit_transform()` on full dataset
-- No `.rolling()` windows that peek forward
-- Run `python .claude/hooks/check-lookahead.py src/<file>.py` before any training
+## Baseline comparison
+Every new model vs:
+1. Naive baseline: always Bull (52.90% accuracy, F1=0.230)
+2. Current champion: xgb_phase3_champion.pkl (F1=0.375)
+
+Report delta explicitly: +0.008 F1, not just 0.383.
+
+## Champion thresholds
+- F1 > 0.375 on OOS to qualify as new champion
+- Sideways recall > 30% (don't collapse the middle class)
+- Bear recall > 20%
 
 ## SHAP
-- Run SHAP after every training run; report top 10 features by mean |SHAP|
-- Key anchors to verify: `atr_pct` #1, `rate_vol_regime` in top 5
+Run after every new champion. Save shap_summary*.csv to models/.
 
-## Model saving
-- Save to `models/` with descriptive name
-- Keep `xgb_phase3_champion.pkl` as safety net — never overwrite unless F1 > 0.375

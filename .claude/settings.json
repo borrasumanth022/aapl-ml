@@ -1,7 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(C:\\Users\\borra\\anaconda3\\python.exe src/*)",
+      "Bash(python src/*)",
       "Bash(git *)",
       "Bash(pip show *)"
     ],

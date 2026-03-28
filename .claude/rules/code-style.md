@@ -1,30 +1,23 @@
-# Code Style Rules — aapl_ml
+# Python Coding Standards -- aapl_ml
 
-## File paths
-- Always use `pathlib.Path` — never raw Windows strings like `"C:\\Users\\..."` in src/
-- Import path constants from `config/paths.py` where available
+## Script structure
+- Each script (01-15) is standalone and re-runnable
+- Print clear progress messages as they run
+- Skip if output file exists; delete to force re-run
+- sys.exit(1) on bad data -- do not silently continue
 
-## Output
-- All `print()` output must be ASCII-only — no Unicode arrows (→), box chars (│), or emoji
-- Use `[INFO]`, `[WARN]`, `[ERROR]` prefixes for log lines
-
-## Function signatures
-- Type hints required on all function signatures
-- Return type annotation required on all functions that return a value
-
-## File writes
-- Skip-if-exists pattern on all output files:
-  ```python
-  if output_path.exists():
-      print(f"[INFO] {output_path.name} already exists — skipping")
-  else:
-      df.to_parquet(output_path)
-  ```
-
-## Imports
-- Standard library → third-party → local, separated by blank lines
-- No wildcard imports (`from module import *`)
+## Naming
+- Files: NN_description.py (step number prefix)
+- Functions: snake_case verbs (load_features, build_labels)
+- Variables: descriptive lowercase (df_features, fold_results)
+- Constants: UPPER_SNAKE_CASE (SIDEWAYS_BAND, HOLDOUT_DATE)
 
 ## Error handling
-- `sys.exit(1)` on bad/missing data — never silent pass
-- Validate required columns exist after loading parquet; print missing columns before exiting
+At system boundaries only (yfinance, FRED, parquet reads).
+Do not wrap internal logic in try/except.
+
+## No speculative complexity
+- No config flags for things with one value
+- No helper functions used only once
+- Prove value at each phase before adding complexity
+

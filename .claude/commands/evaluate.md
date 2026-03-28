@@ -1,27 +1,31 @@
-Evaluate the aapl_ml champion model and produce a structured report for $ARGUMENTS (default: xgb_best_interactions, dir_1w).
+# /project:evaluate -- Evaluate aapl_ml models
 
-Steps:
-1. Load `models/xgb_best_interactions.pkl` (or `xgb_phase3_champion.pkl` if specified).
-2. Load `data/processed/aapl_predictions_interactions.parquet`.
-3. Verify required columns: `actual`, `predicted`, `correct`, `prob_bear`, `prob_sideways`, `prob_bull`.
-4. Compute and report:
+**Usage:**
+- /project:evaluate -- compare all saved model predictions
+- /project:evaluate holdout -- evaluate on 2024-01-01+ holdout only
+- /project:evaluate shap -- re-run SHAP on champion
 
-| Metric | Value | vs Baseline |
-|--------|-------|-------------|
-| OOS Accuracy | ... | 37.50% (always-Bull) |
-| Macro F1 | ... | 0.333 (random) |
-| Bull Recall | ... | — |
-| Bear Recall | ... | — |
-| Sideways Recall | ... | — |
+## Instructions
 
-5. Print confusion matrix.
-6. Compare vs previous champions:
-   - Phase 2 baseline (dir_1w, no events): F1=0.367, Acc=38.35%
-   - Phase 3 champion (57 features + events): F1=0.375, Acc=38.30% ← current
-7. Run SHAP: top 10 features by mean |SHAP|.
-   Key findings to verify: atr_pct #1, rate_vol_regime in top 5, earnings_proximity_surprise in top 10.
-8. Report OOS date range and number of samples.
+1. Read CLAUDE.local.md to get PYTHON_EXE.
 
-Note: aapl_ml uses -1/0/1 label encoding (Bear/Sideways/Bull), not the 0/1/2 used in market_ml.
+2. Load predictions from data/processed/:
+   - aapl_predictions_phase3_champion.parquet (CURRENT champion)
+   - aapl_predictions_best.parquet (Phase 2)
+   - aapl_predictions_lgbm.parquet
+   - aapl_predictions_lstm.parquet
+   - aapl_predictions_lstm_raw.parquet
 
-If $ARGUMENTS specifies `--phase N`, compare against the Phase N model file.
+3. Print the full model leaderboard:
+     Model                             Acc       F1     Bear     Side     Bull
+     XGB P3 champion (57 feat)      38.30%   0.375   30.6%   39.9%   42.0%  <- CHAMPION
+     XGB P2 best (weighted dir_1w)  38.35%   0.367   23.1%   45.5%   41.8%
+     LGBM (57 feat)                 36.07%   0.353   29.6%   34.0%   42.8%
+     LSTM engineered (CV)              --    0.297     --       --       --
+     LSTM raw OHLCV (CV)               --    0.311     --       --       --
+     Naive (always Bull)            52.90%   0.230    0.0%    0.0%  100.0%
+
+4. Holdout evaluation (2024-01-01 to present): all models on holdout rows.
+
+5. Check calibration and directional accuracy.
+

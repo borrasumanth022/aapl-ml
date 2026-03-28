@@ -1,44 +1,36 @@
-# Data Conventions — aapl_ml
+# Data Conventions -- aapl_ml
 
-## Parquet file locations
-- Raw: `data/raw/`
-- Processed: `data/processed/`
-- Key files:
-  - `aapl_features.parquet` — 7,657 rows, 57 cols, 1995-10-16 to 2026-03-20
-  - `aapl_labeled.parquet` — ends 2025-03-19 (last 252 rows dropped for 1Y forward labels)
-  - `aapl_with_events.parquet` — labeled + event features (≥7,000 rows, ≥90 cols)
-  - `aapl_predictions_interactions.parquet` — OOS walk-forward predictions
+## File format
+All data is Parquet. Never CSV. Never SQLite.
 
-## Prediction columns (required schema)
-All prediction parquets must have exactly these columns:
-- `actual` — true label (-1/0/1)
-- `predicted` — model prediction (-1/0/1)
-- `correct` — bool, `actual == predicted`
-- `prob_bear` — probability of Bear class
-- `prob_sideways` — probability of Sideways class
-- `prob_bull` — probability of Bull class
+## Naming schema
+    data/raw/         aapl_daily_raw.parquet
+    data/processed/   aapl_features.parquet
+                      aapl_labeled.parquet
+                      aapl_with_events.parquet
+                      aapl_predictions*.parquet
+    models/           feature_list.json
+                      xgb_phase3_champion.pkl  (CURRENT champion)
+                      xgb_best_interactions.pkl
+                      lgbm_dir_1w.pkl
+                      lstm_dir_1w.pt
+                      lstm_raw_ohlcv.pt
+                      shap_summary*.csv
 
 ## Date column
-- Date column must be named `date` (not `Date` or `index`)
-- Type: `datetime64[ns]`
+Always named date, type datetime64[D].
+Normalize mixed datetime64[ms]/datetime64[us] before joins.
 
-## Column naming
-- Use snake_case for all feature columns
-- No spaces or special characters in column names
-- Ratio features: `<numerator>_<denominator>_ratio` (e.g., `price_sma50_ratio`)
-- Rolling features: `<feature>_<window>d` (e.g., `hvol_21d`, `hvol_63d`)
-- Regime features: `<indicator>_regime` (e.g., `rate_vol_regime`)
-- Event features: `<event>_proximity`, `<event>_surprise`
+## NaN sentinels
+- days_since_last_earnings = 90 for pre-2005 rows
+- days_since_last_product_event = 180 for pre-2000 rows
+- Never use 0 or -1 as sentinels (they are valid feature values)
 
-## Train/test split
-- Walk-forward only — no random splits on time-series data
-- Holdout cutoff: **2024-01-01** (do not touch until final evaluation)
+## Parquet write standard
+    df.to_parquet(path, index=False, engine="pyarrow", compression="snappy")
 
-## Row counts (sanity checks)
-- `aapl_features.parquet`: ≥7,500 rows
-- `aapl_with_events.parquet`: ≥7,000 rows, ≥90 columns
-- Fewer rows than expected → re-run pipeline step 1 and check data source
+## Skip-if-exists pattern
+    if path.exists():
+        print(f"Skipping {path.name} -- exists. Delete to recompute.")
+        return
 
-## No data/model files in git
-- `data/` and `models/` are gitignored
-- Never stage `.parquet`, `.pkl`, or `.pt` files

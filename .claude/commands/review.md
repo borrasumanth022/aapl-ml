@@ -1,40 +1,39 @@
-Review $ARGUMENTS (default: all recently modified files in src/) for lookahead bias, ML best practices, and coding standards.
+# /project:review -- Code review for ML correctness and lookahead bias
 
-Run checks in priority order:
+**Usage:**
+- /project:review -- review files changed in last commit
+- /project:review src/11_interaction_features.py -- specific file
+- /project:review src/ -- all .py files in src/
 
-## 1. Lookahead bias (CRITICAL — run hook first)
-```bash
-python .claude/hooks/check-lookahead.py src/<file>.py
-```
-Manual checks:
-- Any `shift(-N)` where N > 0 on non-label columns
-- Column names: `future_`, `fwd_`, `_forward`, `next_`, `tomorrow`, `lead_`
-- `fit_transform()` on full dataset (must fit on train fold only)
-- `.rolling()` windows that peek forward
+## Instructions
 
-## 2. Walk-forward validation
-- `TimeSeriesSplit(n_splits=5)` — never KFold with shuffle=True
-- Test indices always strictly after training indices
-- No metrics computed on training fold
+Adopt the persona from .claude/agents/code-reviewer.md.
 
-## 3. Data leakage
-- Scalers: `fit(X_train).transform(X_test)` — never `fit_transform(X_full)`
-- No feature computed from future price, volume, or labels
+1. Determine files to review:
+   - If path given, read that file/directory
+   - If no path, run: git diff HEAD~1 --name-only
 
-## 4. Coding standards
-- File paths via `pathlib.Path` — no raw Windows strings in src/
-- `print()` output ASCII-only
-- Type hints on function signatures
-- Skip-if-exists on all output files
+2. For each Python file, run the full checklist:
 
-## 5. ML standards
-- Naive baseline (37.50% always-Bull for dir_1w) reported alongside accuracy
-- Both OOS Accuracy AND Macro F1 reported
-- `class_weight="balanced"` set
+   Lookahead bias:
+   - [ ] No shift(-N) on price/return columns as features
+   - [ ] No rolling(..., center=True) on feature columns
+   - [ ] No target column or derivative used as a feature
 
-## 6. aapl_ml-specific
-- Label encoding: -1=Bear, 0=Sideways, 1=Bull (aapl_ml convention — different from market_ml)
-- Prediction columns: `actual`, `predicted`, `correct`, `prob_bear`, `prob_sideways`, `prob_bull`
-- Model file: save to `models/` with clear name, keep `xgb_phase3_champion.pkl` as safety net
+   Walk-forward validation:
+   - [ ] Uses TimeSeriesSplit, not KFold(shuffle=True)
+   - [ ] Train rows always earlier in time than test rows
 
-Format: `[SEVERITY] file.py:line — description — consequence`
+   Holdout:
+   - [ ] Holdout cutoff is 2024-01-01
+   - [ ] Holdout not touched until final model comparison
+
+   AAPL-specific:
+   - [ ] NaN sentinels: 90 for pre-2005 earnings, 180 for pre-2000 product events
+   - [ ] SHAP saved to CSV after each new champion
+   - [ ] Per-class recall reported (not just accuracy)
+
+3. For each FAIL: file, line number, code, why wrong, correct fix.
+
+4. Final verdict: CLEAN or ISSUES FOUND (N issues).
+

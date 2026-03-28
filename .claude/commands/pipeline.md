@@ -1,28 +1,42 @@
-Run the aapl_ml single-ticker pipeline for $ARGUMENTS (default: full pipeline AAPL, all steps).
+# /project:pipeline -- Run the aapl_ml pipeline
 
-Read CLAUDE.local.md for {PYTHON_EXE}. Steps to run in order:
+**Usage:**
+- /project:pipeline 1 -- Phase 1: data foundation (steps 01-03)
+- /project:pipeline 2 -- Phase 2: pattern recognition (steps 04-07)
+- /project:pipeline 3 -- Phase 3: event linkage (steps 08-11)
+- /project:pipeline 11 -- run single script (e.g., script 11)
 
-1. `{PYTHON_EXE} src/01_fetch_data.py` — download AAPL OHLCV from Yahoo Finance
-2. `{PYTHON_EXE} src/02_features.py` — compute 36 technical features (7,600+ rows)
-3. `{PYTHON_EXE} src/03_labels.py` — compute 20 label columns (5 horizons × 4 types)
-4. `{PYTHON_EXE} src/04_events.py` — collect FRED macro + Apple product events (1,320+ macro, 85 earnings, 64 product events)
-5. `{PYTHON_EXE} src/05_event_features.py` — merge events → 57-column feature matrix
-6. `{PYTHON_EXE} src/06_train.py` — train XGBoost champion model
+## Instructions
 
-Before step 2, run `python .claude/hooks/check-lookahead.py src/02_features.py` and confirm no CRITICAL findings.
-After each step, run `python .claude/hooks/validate-data.py` to verify output parquets.
+1. Read CLAUDE.local.md to get PYTHON_EXE.
 
-Expected outputs:
-- After step 1: `data/raw/aapl_daily_raw.parquet` (≥6,000 rows)
-- After step 2: `data/processed/aapl_features.parquet` (≥7,000 rows, 36 cols)
-- After step 3: `data/processed/aapl_labeled.parquet` (≥7,000 rows, 57 cols)
-- After step 5: `data/processed/aapl_with_events.parquet` (≥7,000 rows, ≥90 cols)
-- After step 6: `models/xgb_best_interactions.pkl` + `data/processed/aapl_predictions_interactions.parquet`
+2. Phase-to-script mapping:
+   Phase 1 -- Data Foundation:
+     01_fetch_data.py        Download AAPL OHLCV (7,856 rows)
+     02_features.py          57-column feature matrix
+     03_labels.py            20 label columns (5 horizons)
 
-Report after training:
-- OOS Accuracy vs naive baseline (always-Bull = 37.50% for dir_1w)
-- Macro F1 (target: ≥ 0.375, current champion = 0.375)
-- Per-class recall: Bear / Sideways / Bull
+   Phase 2 -- Pattern Recognition:
+     04_feature_selection.py 36 selected features
+     05_train_baseline.py    XGBoost dir_1m baseline
+     07_best_model.py        Best model + SHAP
 
-If $ARGUMENTS specifies `--step N`, run only that step.
-If $ARGUMENTS specifies `--force`, overwrite existing files.
+   Phase 3 -- Event Linkage:
+     08_events.py            1,474 events (yfinance/FRED/hardcoded)
+     09_event_features.py    16 event features -> 93 columns
+     11_interaction_features.py  57 features CHAMPION (F1=0.375)
+
+   Phase 4 -- Fusion:
+     12_lgbm.py              LightGBM (F1=0.353, below champion)
+     13_ensemble.py          XGB+LGBM stacking (F1=0.347, below champion)
+
+   Phase 5 -- Prediction Engine:
+     14_lstm.py              LSTM 57-feat (CV F1=0.297, below champion)
+     15_lstm_raw.py          LSTM raw OHLCV (CV F1=0.311, below champion)
+
+3. Current champion: models/xgb_phase3_champion.pkl (dir_1w, 57 feat, F1=0.375)
+
+4. If any script exits non-zero, stop and report. Do not continue.
+
+5. After any training script, compare to champion F1=0.375 and report the delta.
+
