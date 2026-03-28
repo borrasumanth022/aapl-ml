@@ -1,6 +1,7 @@
-# Claude Code internal files
+# Claude Code internal files (private — do not commit)
 CLAUDE.md
-.claude/
+CLAUDE.local.md
+.claude/settings.local.json
 
 # Python
 __pycache__/
